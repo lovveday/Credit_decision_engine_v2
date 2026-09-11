@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Credit Decision</title>
+<style>
+  :root {
+    --brand-color: #1a56db;
+    --brand-color-dark: #164bb8;
+    --mancity-blue: #6CABDD;
+    --bg: #f7f8fa;
+    --card-bg: #fff;
+    --text: #1a1a1a;
+    --approve-bg: #e7f7ee; --approve-border: #34a853;
+    --refer-bg: #fff8e1;   --refer-border: #f5b400;
+    --decline-bg: #fde8e8; --decline-border: #e02424;
+  }
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 820px; margin: 30px auto; padding: 0 20px; background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .brand-logo { width: 34px; height: 34px; border-radius: 8px; background: var(--brand-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  .subtitle { color: #666; margin-bottom: 20px; font-size: 14px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 2px solid #e0e0e0; }
+  .tab-btn { padding: 10px 18px; background: none; border: none; cursor: pointer; font-size: 14px; color: #666; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+  .tab-btn.active { color: var(--brand-color); border-bottom-color: var(--brand-color); font-weight: 600; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  fieldset { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; padding: 16px; background: var(--card-bg); }
+  legend { font-weight: 600; padding: 0 6px; }
+  label { display: block; font-size: 13px; margin-top: 10px; margin-bottom: 3px; color: #333; }
+  input, select { width: 100%; padding: 7px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
+  input[readonly] { background: #f0f1f3; color: #555; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  button.submit { margin-top: 20px; width: 100%; padding: 12px; background: var(--brand-color); color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+  button.submit:hover { background: var(--brand-color-dark); }
+  #result { margin-top: 20px; padding: 18px; border-radius: 8px; display: none; }
+  #result.approve { background: var(--approve-bg); border: 1px solid var(--approve-border); }
+  #result.refer { background: var(--refer-bg); border: 1px solid var(--refer-border); }
+  #result.decline { background: var(--decline-bg); border: 1px solid var(--decline-border); }
+  #result h2 { margin: 0 0 8px 0; }
+  #result .reason-list { margin: 6px 0; padding-left: 18px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .checkbox-row input { width: auto; }
+  .hint { font-size: 11px; color: #888; margin-top: 2px; }
+  #loading { display: none; margin-top: 16px; color: #666; font-style: italic; }
+  .hidden-section { display: none; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 8px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; }
+  th { background: #f0f1f3; font-weight: 600; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .badge.Approve { background: var(--approve-bg); color: var(--approve-border); }
+  .badge.Refer { background: var(--refer-bg); color: #a67c00; }
+  .badge.Decline { background: var(--decline-bg); color: var(--decline-border); }
+  #historyLoading { color: #666; font-size: 14px; }
+
+  footer { text-align: center; margin-top: 40px; padding: 18px 0; font-size: 13px; color: var(--mancity-blue); font-weight: 600; }
+  label:has(+ input:required)::after,
+  label:has(+ select:required)::after {
+  content: " *";
+  color: #e02424;
+  font-weight: 700;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-logo">CD</div>
+  <h1>Credit Decision Engine</h1>
+</header>
+<div class="subtitle">Applicant scoring — ML risk model + business rules + bank statement verification</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="newApp">New Application</button>
+  <button class="tab-btn" data-tab="history">Application History</button>
+</div>
+
+<div class="tab-content active" id="newApp">
+<form id="applicantForm">
+
+  <fieldset>
+    <legend>Identity (KYC)</legend>
+    <div class="row">
+      <div><label>First Name</label><input required id="FIRST_NAME"></div>
+      <div><label>Middle Name</label><input id="MIDDLE_NAME"></div>
+      <div><label>Last Name</label><input required id="LAST_NAME"></div>
+    </div>
+    <div class="row">
+      <div><label>Date of Birth</label><input required type="date" id="DATE_OF_BIRTH"></div>
+      <div><label>Phone Number</label><input required pattern="\d{11}" maxlength="11" id="PHONE_NUMBER"></div>
+    </div>
+    <div class="row">
+      <div><label>BVN</label><input required pattern="\d{11}" maxlength="11" id="BVN"></div>
+      <div><label>NIN</label><input required pattern="\d{11}" maxlength="11" id="NIN"></div>
+    </div>
+    <div class="hint">Phone, BVN, NIN must be exactly 11 digits.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Employment</legend>
+    <label>Employment Status</label>
+    <select required id="EMPLOYMENT_STATUS">
+      <option value="">-- Select --</option>
+      <option value="Salaried employee">Salaried employee</option>
+      <option value="Self-employed">Self-employed</option>
+      <option value="Informal worker">Informal worker</option>
+      <option value="Professional">Professional</option>
+      <option value="Student">Student</option>
+      <option value="Unemployed">Unemployed</option>
+      <option value="Retired">Retired</option>
+    </select>
+
+    <div id="occupationBlock" class="hidden-section">
+      <label style="margin-top:10px">Occupation</label>
+      <select required id="OCCUPATION_SELECT"></select>
+      <div id="occupationOtherBlock" class="hidden-section">
+        <label>Please specify occupation</label>
+        <input id="OCCUPATION_OTHER">
+      </div>
+    </div>
+
+    <!-- Current employer: Salaried / Informal / Professional -->
+    <div id="currentEmployerBlock" class="hidden-section">
+      <div class="row" style="margin-top:10px">
+        <div><label>Employer / Business Name</label><input required id="EMPLOYER_NAME"></div>
+        <div><label>Employment Start Date</label><input required type="date" id="EMPLOYMENT_START_DATE"></div>
+      </div>
+      <label>Years Employed</label>
+      <input readonly id="YEARS_EMPLOYED_DISPLAY">
+    </div>
+
+    <!-- Previous employment: Unemployed / Retired -->
+    <div id="previousEmploymentBlock" class="hidden-section">
+      <div class="row" style="margin-top:10px">
+        <div><label>Previous Employer / Business Name</label><input required id="PREV_EMPLOYER_NAME"></div>
+        <div><label>Previous Title / Role</label><input required id="PREV_TITLE"></div>
+      </div>
+      <div class="row">
+        <div><label>Start Date</label><input required type="date" id="PREV_START_DATE"></div>
+        <div><label>End Date</label><input required type="date" id="PREV_END_DATE"></div>
+      </div>
+      <label>Years of Experience</label>
+      <input readonly id="PREV_YEARS_DISPLAY">
+    </div>
+
+    <!-- Business info: Self-employed -->
+    <div id="businessBlock" class="hidden-section">
+      <div class="row" style="margin-top:10px">
+        <div><label>Business Name</label><input required id="BUSINESS_NAME"></div>
+        <div><label>Business Type</label>
+          <select required id="BUSINESS_TYPE">
+            <option value="">-- Select --</option>
+            <option>Sole Proprietorship</option>
+            <option>Partnership</option>
+            <option>Limited Liability Company</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div><label>Business Industry</label>
+          <select required id="BUSINESS_INDUSTRY">
+            <option value="">-- Select --</option>
+            <option>Retail/Trading</option>
+            <option>Manufacturing</option>
+            <option>Services</option>
+            <option>Agriculture</option>
+            <option>Technology</option>
+            <option>Food & Beverage</option>
+            <option>Fashion/Beauty</option>
+            <option>Transportation</option>
+            <option>Construction</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div><label>Registration Status</label>
+          <select required id="BUSINESS_REG_STATUS">
+            <option value="">-- Select --</option>
+            <option>Registered (CAC)</option>
+            <option>Not Registered</option>
+          </select>
+        </div>
+      </div>
+      <div id="cacBlock" class="hidden-section">
+        <label>CAC Registration Number</label>
+        <input id="CAC_NUMBER">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><label>Business Location</label><input required id="BUSINESS_LOCATION"></div>
+        <div><label>Business Start Date</label><input required type="date" id="BUSINESS_START_DATE"></div>
+      </div>
+      <label>Years in Business (auto-calculated)</label>
+      <input readonly id="YEARS_IN_BUSINESS_DISPLAY">
+      <div class="row" style="margin-top:10px">
+        <div><label>Number of Employees</label><input required type="number" id="NUM_EMPLOYEES" value="0"></div>
+        <div><label>Premises Ownership</label>
+          <select required id="PREMISES_OWNERSHIP">
+            <option value="">-- Select --</option>
+            <option>Own</option>
+            <option>Rent</option>
+            <option>Shared/Informal</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><label>Average Monthly Revenue (NGN)</label><input required type="number" id="AVG_MONTHLY_REVENUE"></div>
+        <div><label>Average Monthly Expenses (NGN)</label><input required type="number" id="AVG_MONTHLY_EXPENSES"></div>
+      </div>
+      <label>Average Monthly Profit (auto-calculated)</label>
+      <input readonly id="AVG_MONTHLY_PROFIT_DISPLAY">
+      <div class="row" style="margin-top:10px">
+        <div><label>Business Bank Account?</label>
+          <select required id="HAS_BUSINESS_BANK_ACCOUNT"><option value="">-- Select --</option><option>Yes</option><option>No</option></select>
+        </div>
+        <div><label>Uses POS?</label>
+          <select required id="USES_POS"><option value="">-- Select --</option><option>Yes</option><option>No</option></select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><label>Online Sales?</label>
+          <select required id="HAS_ONLINE_SALES"><option value="">-- Select --</option><option>Yes</option><option>No</option></select>
+        </div>
+        <div><label>Cash Sales Percentage (0-100)</label><input required type="number" min="0" max="100" id="CASH_SALES_PCT"></div>
+      </div>
+      <div class="checkbox-row"><input type="checkbox" id="IS_SEASONAL_BUSINESS"><label style="margin:0">Business is seasonal</label></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Financial</legend>
+    <div class="row">
+      <div><label>Monthly Income (NGN)</label><input required type="number" id="AMT_INCOME_TOTAL"></div>
+      <div><label>Requested Credit Amount</label><input required type="number" id="AMT_CREDIT"></div>
+    </div>
+    <div class="row">
+      <div><label>Annuity (Repayment Amount)</label><input required type="number" id="AMT_ANNUITY"></div>
+      <div><label>Goods/Asset Price (if applicable)</label><input type="number" id="AMT_GOODS_PRICE"></div>
+    </div>
+    <div class="hint" id="incomeHint"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Credit Bureau Scores</legend>
+    <div class="row">
+      <div><label>External Score 1 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_1"></div>
+      <div><label>External Score 2 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_2"></div>
+      <div><label>External Score 3 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_3"></div>
+    </div>
+    <div class="hint">this come from a credit bureau API.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Demographics</legend>
+    <div class="row">
+      <div><label>Family Status</label>
+        <select required id="NAME_FAMILY_STATUS">
+          <option value="">-- Select --</option>
+          <option>Married</option><option>Single / not married</option><option>Civil marriage</option><option>Separated</option><option>Widow</option>
+        </select>
+      </div>
+      <div><label>Education</label>
+        <select required id="NAME_EDUCATION_TYPE">
+          <option value="">-- Select --</option>
+          <option>Secondary / secondary special</option><option>Higher education</option><option>Incomplete higher</option><option>Lower secondary</option><option>Academic degree</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Number of Children</label><input required type="number" id="CNT_CHILDREN" value="0"></div>
+      <div><label>Own a Car?</label><select required id="FLAG_OWN_CAR"><option value="">-- Select --</option><option>YES</option><option>NO</option></select></div>
+      <div><label>Own Real Estate?</label><select required id="FLAG_OWN_REALTY"><option value="">-- Select --</option><option>YES</option><option>NO</option></select></div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Location</legend>
+    <div class="row">
+      <div><label>Region Population Density (0-0.1)</label><input required type="number" step="0.001" id="REGION_POPULATION_RELATIVE" value="0.02"></div>
+      <div><label>Region Rating (1=best, 3=worst)</label>
+        <select required id="REGION_RATING_CLIENT"><option value="">-- Select --</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+      </div>
+    </div>
+    <div class="checkbox-row"><input type="checkbox" id="REG_CITY_NOT_LIVE_CITY"><label style="margin:0">Registered city differs from city of residence</label></div>
+    <div class="checkbox-row"><input type="checkbox" id="REG_REGION_NOT_LIVE_REGION"><label style="margin:0">Registered region differs from region of residence</label></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Bank Statement (optional)</legend>
+    <label>Upload statement (PDF / CSV / DOCX / image)</label>
+    <input type="file" id="statementFile">
+    <label style="margin-top:10px">Password (if the PDF is protected)</label>
+    <input type="password" id="statementPassword">
+  </fieldset>
+
+  <button type="submit" class="submit">Get Decision</button>
+</form>
+
+<div id="loading">Hold on, we're reviewing this application…</div>
+<div id="result"></div>
+</div>
+
+<div class="tab-content" id="history">
+  <div id="historyLoading">Loading history…</div>
+  <table id="historyTable" style="display:none">
+    <thead>
+      <tr><th>ID</th><th>Time</th><th>Name</th><th>Phone</th><th>Employment</th><th>Decision</th><th>Risk Band</th><th>Probability</th><th>Recommended Amount</th></tr>
+    </thead>
+    <tbody id="historyBody"></tbody>
+  </table>
+</div>
+
+<footer>
+  Built with ❤️ by lovveday<br>
+  ©lovveday 2026
+</footer>
+
+<script>
+// ==================== Occupation lists per employment category ====================
+const OCCUPATION_LISTS = {
+  "Salaried employee": [
+    "Private sector employee","Public/Government employee","NGO/Non-profit employee",
+    "Multinational/company employee","Contract employee","Casual/temporary employee"
+  ],
+  "Self-employed": [
+    "Business owner","Trader","Artisan","Professional services","Consultant",
+    "Freelancer","Contractor","Agent","Online business/e-commerce"
+  ],
+  "Informal worker": [
+    "Market trader","Transport operator","Farmer","Food vendor","Mechanic",
+    "Tailor/fashion designer","Hairdresser/barber","Technician","Builder/artisan","Other informal occupation"
+  ],
+  "Professional": [
+    "Doctor","Nurse","Pharmacist","Engineer","Accountant","Lawyer","Teacher",
+    "Software/IT professional","Data professional","Architect","Other professional"
+  ],
+};
+
+// Maps detailed UI occupation -> nearest category the trained ML model actually recognizes
+const OCCUPATION_TO_TRAINED = {
+  "Private sector employee": "Core staff", "Public/Government employee": "Core staff",
+  "NGO/Non-profit employee": "Core staff", "Multinational/company employee": "Managers",
+  "Contract employee": "Laborers", "Casual/temporary employee": "Low-skill Laborers",
+  "Business owner": "Managers", "Trader": "Sales staff", "Artisan": "Laborers",
+  "Professional services": "High skill tech staff", "Consultant": "High skill tech staff",
+  "Freelancer": "IT staff", "Contractor": "Laborers", "Agent": "Sales staff",
+  "Online business/e-commerce": "Sales staff",
+  "Market trader": "Sales staff", "Transport operator": "Drivers", "Farmer": "Laborers",
+  "Food vendor": "Cooking staff", "Mechanic": "Laborers", "Tailor/fashion designer": "Laborers",
+  "Hairdresser/barber": "Private service staff", "Technician": "Laborers",
+  "Builder/artisan": "Laborers", "Other informal occupation": "Low-skill Laborers",
+  "Doctor": "Medicine staff", "Nurse": "Medicine staff", "Pharmacist": "Medicine staff",
+  "Engineer": "High skill tech staff", "Accountant": "Accountants", "Lawyer": "High skill tech staff",
+  "Teacher": "Core staff", "Software/IT professional": "IT staff", "Data professional": "IT staff",
+  "Architect": "High skill tech staff", "Other professional": "High skill tech staff",
+};
+
+// Maps Employment Status -> nearest NAME_INCOME_TYPE the trained model recognizes
+function mapIncomeType(employmentStatus, occupation) {
+  if (employmentStatus === "Salaried employee" && occupation === "Public/Government employee") return "State servant";
+  if (employmentStatus === "Self-employed") return "Businessman";
+  if (employmentStatus === "Student") return "Student";
+  if (employmentStatus === "Unemployed") return "Unemployed";
+  if (employmentStatus === "Retired") return "Pensioner";
+  return "Working"; // Salaried (other), Informal, Professional
+}
+
+function yearsBetween(startStr, endStr) {
+  if (!startStr) return 0;
+  const start = new Date(startStr);
+  const end = endStr ? new Date(endStr) : new Date();
+  const years = (end - start) / (1000 * 60 * 60 * 24 * 365.25);
+  return Math.max(0, Math.round(years * 10) / 10);
+}
+
+function calcAge(dobStr) {
+  if (!dobStr) return 0;
+  const dob = new Date(dobStr);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+// ==================== Employment Status change handler ====================
+const empStatusSelect = document.getElementById('EMPLOYMENT_STATUS');
+const occupationBlock = document.getElementById('occupationBlock');
+const occupationSelect = document.getElementById('OCCUPATION_SELECT');
+const occupationOtherBlock = document.getElementById('occupationOtherBlock');
+const currentEmployerBlock = document.getElementById('currentEmployerBlock');
+const previousEmploymentBlock = document.getElementById('previousEmploymentBlock');
+const businessBlock = document.getElementById('businessBlock');
+
+function setRequiredFor(selector, required) {
+  document.querySelectorAll(selector).forEach(field => {
+    field.required = required;
+  });
+}
+
+function updateEmploymentRequirements(status) {
+  const hasOccupationList = Object.prototype.hasOwnProperty.call(OCCUPATION_LISTS, status);
+  const hasCurrentEmployment = ["Salaried employee", "Informal worker", "Professional"].includes(status);
+  const hasPreviousEmployment = ["Unemployed", "Retired"].includes(status);
+  const isSelfEmployed = status === "Self-employed";
+
+  setRequiredFor('#occupationBlock select', hasOccupationList);
+  setRequiredFor('#currentEmployerBlock input:not([readonly]), #currentEmployerBlock select', hasCurrentEmployment);
+  setRequiredFor('#previousEmploymentBlock input:not([readonly]), #previousEmploymentBlock select', hasPreviousEmployment);
+  setRequiredFor('#businessBlock input:not([readonly]):not(#CAC_NUMBER), #businessBlock select', isSelfEmployed);
+  setRequiredFor('#CAC_NUMBER', false);
+  document.getElementById('OCCUPATION_OTHER').required = hasOccupationList && occupationSelect.value === 'Other';
+}
+
+empStatusSelect.addEventListener('change', () => {
+  const status = empStatusSelect.value;
+  const hasOccupationList = OCCUPATION_LISTS.hasOwnProperty(status);
+
+  occupationBlock.classList.toggle('hidden-section', !hasOccupationList);
+  currentEmployerBlock.classList.toggle('hidden-section', !["Salaried employee","Informal worker","Professional"].includes(status));
+  previousEmploymentBlock.classList.toggle('hidden-section', !["Unemployed","Retired"].includes(status));
+  businessBlock.classList.toggle('hidden-section', status !== "Self-employed");
+
+  if (hasOccupationList) {
+    occupationSelect.innerHTML = '<option value="">-- Select --</option>' +
+      OCCUPATION_LISTS[status].map(o => `<option>${o}</option>`).join('') +
+      '<option value="Other">Other (please specify)</option>';
+  }
+
+  updateEmploymentRequirements(status);
+  updateIncomeHint();
+});
+
+occupationSelect.addEventListener('change', () => {
+  occupationOtherBlock.classList.toggle('hidden-section', occupationSelect.value !== 'Other');
+  document.getElementById('OCCUPATION_OTHER').required = occupationSelect.value === 'Other';
+});
+
+updateEmploymentRequirements(empStatusSelect.value);
+
+// ==================== Auto-calculated fields ====================
+document.getElementById('DATE_OF_BIRTH').addEventListener('change', function() {});
+
+document.getElementById('EMPLOYMENT_START_DATE').addEventListener('change', function() {
+  document.getElementById('YEARS_EMPLOYED_DISPLAY').value = yearsBetween(this.value) + ' years';
+});
+
+['PREV_START_DATE', 'PREV_END_DATE'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    const start = document.getElementById('PREV_START_DATE').value;
+    const end = document.getElementById('PREV_END_DATE').value;
+    document.getElementById('PREV_YEARS_DISPLAY').value = yearsBetween(start, end) + ' years';
+  });
+});
+
+document.getElementById('BUSINESS_START_DATE').addEventListener('change', function() {
+  document.getElementById('YEARS_IN_BUSINESS_DISPLAY').value = yearsBetween(this.value) + ' years';
+});
+
+['AVG_MONTHLY_REVENUE', 'AVG_MONTHLY_EXPENSES'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateBusinessProfit);
+});
+
+function updateBusinessProfit() {
+  const rev = parseFloat(document.getElementById('AVG_MONTHLY_REVENUE').value) || 0;
+  const exp = parseFloat(document.getElementById('AVG_MONTHLY_EXPENSES').value) || 0;
+  const profit = rev - exp;
+  document.getElementById('AVG_MONTHLY_PROFIT_DISPLAY').value = '₦' + profit.toLocaleString();
+  if (empStatusSelect.value === 'Self-employed' && profit > 0) {
+    document.getElementById('AMT_INCOME_TOTAL').value = profit;
+  }
+  updateIncomeHint();
+}
+
+document.getElementById('BUSINESS_REG_STATUS').addEventListener('change', function() {
+  const isRegistered = this.value === 'Registered (CAC)';
+  document.getElementById('cacBlock').classList.toggle('hidden-section', !isRegistered);
+  document.getElementById('CAC_NUMBER').required = isRegistered;
+});
+
+function updateIncomeHint() {
+  const hint = document.getElementById('incomeHint');
+  if (empStatusSelect.value === 'Self-employed') {
+    hint.textContent = 'Auto-filled from average monthly business profit (revenue − expenses) — more reliable than self-declared income.';
+  } else {
+    hint.textContent = '';
+  }
+}
+
+// ==================== Tab switching ====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'history') loadHistory();
+  });
+});
+
+// ==================== Form submit ====================
+document.getElementById('applicantForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const num = (id) => parseFloat(val(id)) || 0;
+  const checked = (id) => document.getElementById(id).checked ? 1 : 0;
+
+  const employmentStatus = val('EMPLOYMENT_STATUS');
+  const occupationRaw = val('OCCUPATION_SELECT');
+  const occupationDisplay = occupationRaw === 'Other' ? val('OCCUPATION_OTHER') : occupationRaw;
+  const trainedOccupation = OCCUPATION_TO_TRAINED[occupationRaw] || "Unknown";
+  const trainedIncomeType = mapIncomeType(employmentStatus, occupationRaw);
+
+  const isUnemployedOrRetired = ["Unemployed", "Retired"].includes(employmentStatus) ? 1 : 0;
+
+  let yearsEmployed = 0;
+  if (["Salaried employee","Informal worker","Professional"].includes(employmentStatus)) {
+    yearsEmployed = yearsBetween(val('EMPLOYMENT_START_DATE'));
+  } else if (employmentStatus === 'Self-employed') {
+    yearsEmployed = yearsBetween(val('BUSINESS_START_DATE'));
+  }
+
+  const income = num('AMT_INCOME_TOTAL');
+  const credit = num('AMT_CREDIT');
+  const annuity = num('AMT_ANNUITY');
+  const goods = num('AMT_GOODS_PRICE') || credit; // fall back to credit if no goods price given
+
+  const ext1 = val('EXT_SOURCE_1'), ext2 = val('EXT_SOURCE_2'), ext3 = val('EXT_SOURCE_3');
+
+  const applicant = {
+    PHONE_NUMBER: val('PHONE_NUMBER'),
+    BVN: val('BVN'),
+    NIN: val('NIN'),
+    AMT_INCOME_TOTAL: income,
+    AMT_CREDIT: credit,
+    AMT_ANNUITY: annuity,
+    AMT_GOODS_PRICE: goods,
+    EXT_SOURCE_1: ext1 ? parseFloat(ext1) : 0.5,
+    EXT_SOURCE_2: ext2 ? parseFloat(ext2) : 0.5,
+    EXT_SOURCE_3: ext3 ? parseFloat(ext3) : 0.5,
+    EXT_SOURCE_1_MISSING: ext1 ? 0 : 1,
+    EXT_SOURCE_2_MISSING: ext2 ? 0 : 1,
+    EXT_SOURCE_3_MISSING: ext3 ? 0 : 1,
+    AGE_YEARS: calcAge(val('DATE_OF_BIRTH')),
+    YEARS_EMPLOYED: yearsEmployed,
+    IS_UNEMPLOYED_OR_RETIRED: isUnemployedOrRetired,
+    CREDIT_INCOME_RATIO: income ? credit / income : 0,
+    ANNUITY_INCOME_RATIO: income ? annuity / income : 0,
+    CREDIT_GOODS_RATIO: goods ? credit / goods : 0,
+    INCOME_OUTLIER_FLAG: income > 10000000 ? 1 : 0,
+    CNT_CHILDREN: num('CNT_CHILDREN'),
+    FLAG_OWN_CAR: val('FLAG_OWN_CAR'),
+    FLAG_OWN_REALTY: val('FLAG_OWN_REALTY'),
+    NAME_EDUCATION_TYPE: val('NAME_EDUCATION_TYPE'),
+    NAME_FAMILY_STATUS: val('NAME_FAMILY_STATUS'),
+    NAME_INCOME_TYPE: trainedIncomeType,
+    OCCUPATION_TYPE: trainedOccupation,
+    REGION_POPULATION_RELATIVE: num('REGION_POPULATION_RELATIVE'),
+    REGION_RATING_CLIENT: parseInt(val('REGION_RATING_CLIENT')) || 2,
+    REG_CITY_NOT_LIVE_CITY: checked('REG_CITY_NOT_LIVE_CITY'),
+    REG_REGION_NOT_LIVE_REGION: checked('REG_REGION_NOT_LIVE_REGION'),
+    ORGANIZATION_TYPE: val('EMPLOYER_NAME') || val('BUSINESS_NAME') || 'Other',
+  };
+
+  // Raw profile bundle — captured for display/history/rules, not fed directly into the ML model
+  const profile = {
+    FIRST_NAME: val('FIRST_NAME'), MIDDLE_NAME: val('MIDDLE_NAME'), LAST_NAME: val('LAST_NAME'),
+    DATE_OF_BIRTH: val('DATE_OF_BIRTH'),
+    EMPLOYMENT_STATUS: employmentStatus,
+    OCCUPATION_DISPLAY: occupationDisplay,
+    EMPLOYER_NAME: val('EMPLOYER_NAME'),
+    EMPLOYMENT_START_DATE: val('EMPLOYMENT_START_DATE'),
+    PREV_EMPLOYER_NAME: val('PREV_EMPLOYER_NAME'),
+    PREV_TITLE: val('PREV_TITLE'),
+    PREV_START_DATE: val('PREV_START_DATE'),
+    PREV_END_DATE: val('PREV_END_DATE'),
+    BUSINESS_NAME: val('BUSINESS_NAME'),
+    BUSINESS_TYPE: val('BUSINESS_TYPE'),
+    BUSINESS_INDUSTRY: val('BUSINESS_INDUSTRY'),
+    BUSINESS_REG_STATUS: val('BUSINESS_REG_STATUS'),
+    CAC_NUMBER: val('CAC_NUMBER'),
+    BUSINESS_LOCATION: val('BUSINESS_LOCATION'),
+    BUSINESS_START_DATE: val('BUSINESS_START_DATE'),
+    NUM_EMPLOYEES: num('NUM_EMPLOYEES'),
+    AVG_MONTHLY_REVENUE: num('AVG_MONTHLY_REVENUE'),
+    AVG_MONTHLY_EXPENSES: num('AVG_MONTHLY_EXPENSES'),
+    AVG_MONTHLY_PROFIT: num('AVG_MONTHLY_REVENUE') - num('AVG_MONTHLY_EXPENSES'),
+    HAS_BUSINESS_BANK_ACCOUNT: val('HAS_BUSINESS_BANK_ACCOUNT'),
+    USES_POS: val('USES_POS'),
+    HAS_ONLINE_SALES: val('HAS_ONLINE_SALES'),
+    CASH_SALES_PCT: num('CASH_SALES_PCT'),
+    PREMISES_OWNERSHIP: val('PREMISES_OWNERSHIP'),
+    IS_SEASONAL_BUSINESS: checked('IS_SEASONAL_BUSINESS'),
+  };
+
+  const formData = new FormData();
+  formData.append('applicant_json', JSON.stringify(applicant));
+  formData.append('profile_json', JSON.stringify(profile));
+
+  const fileInput = document.getElementById('statementFile');
+  if (fileInput.files.length > 0) formData.append('file', fileInput.files[0]);
+  const password = val('statementPassword');
+  if (password) formData.append('password', password);
+
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('result').style.display = 'none';
+
+  try {
+    const res = await fetch('/score-full', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail || data.message || `Server error (${res.status})`);
+    }
+    renderResult(data);
+  } catch (err) {
+    const result = document.getElementById('result');
+    result.className = 'decline';
+    result.style.display = 'block';
+    result.innerHTML = `<h2>Request failed</h2><p>${err.message}</p>`;
+  } finally {
+    document.getElementById('loading').style.display = 'none';
+  }
+});
+
+function renderResult(data) {
+  const el = document.getElementById('result');
+  const cls = (data.decision || '').toLowerCase();
+  el.className = cls;
+  el.style.display = 'block';
+
+  let html = `<h2>Decision: ${data.decision}</h2>`;
+
+  if (data.explanation && data.explanation.summary) {
+    html += `<p style="font-size:15px;line-height:1.5">${data.explanation.summary}</p>`;
+  }
+
+  html += `<p><b>Risk Band:</b> ${data.risk_band} &nbsp; <b>Probability:</b> ${(data.probability*100).toFixed(0)}%</p>`;
+  if (data.rule_triggered) html += `<p><b>Rule Triggered:</b> ${data.rule_triggered}</p>`;
+
+  if (data.loan_recommendation) {
+    const lr = data.loan_recommendation;
+    html += `<p><b>Recommended Max Credit:</b> ₦${Number(lr.recommended_max_credit).toLocaleString()}`;
+    if (lr.recommended_tenure_months) html += ` over <b>${lr.recommended_tenure_months} months</b>`;
+    html += `</p>`;
+    html += `<p style="font-size:12px;color:#666">${lr.note}</p>`;
+  }
+
+  if (data.explanation && data.explanation.key_factors && data.explanation.key_factors.length) {
+    html += `<p><b>Key Factors:</b></p><ul class="reason-list">`;
+    data.explanation.key_factors.forEach(f => html += `<li><b>${f.factor}:</b> ${f.explanation}</li>`);
+    html += `</ul>`;
+  } else if (data.top_risk_reasons && data.top_risk_reasons.length) {
+    html += `<p><b>Top Risk Factors:</b></p><ul class="reason-list">`;
+    data.top_risk_reasons.forEach(r => html += `<li>${r}</li>`);
+    html += `</ul>`;
+  }
+
+  if (data.bank_statement_summary) {
+    const s = data.bank_statement_summary;
+    html += `<p><b>Bank Statement:</b> ${s.num_transactions || 0} transactions found, ${s.bounced_count || 0} bounced (source: ${s.source || 'n/a'})</p>`;
+  }
+  if (data.behavioral_advisory_flags && data.behavioral_advisory_flags.length) {
+    html += `<p><b>Advisory Flags (manual review):</b></p><ul class="reason-list">`;
+    data.behavioral_advisory_flags.forEach(f => html += `<li>${f}</li>`);
+    html += `</ul>`;
+  }
+  el.innerHTML = html;
+}
+
+async function loadHistory() {
+  document.getElementById('historyLoading').style.display = 'block';
+  document.getElementById('historyTable').style.display = 'none';
+  try {
+    const res = await fetch('/applications');
+    const rows = await res.json();
+    const tbody = document.getElementById('historyBody');
+    tbody.innerHTML = '';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      const name = [r.first_name, r.last_name].filter(Boolean).join(' ');
+      tr.innerHTML = `
+        <td>${r.id}</td>
+        <td>${new Date(r.timestamp).toLocaleString()}</td>
+        <td>${name}</td>
+        <td>${r.phone_number || ''}</td>
+        <td>${r.employment_status || ''}</td>
+        <td><span class="badge ${r.decision}">${r.decision}</span></td>
+        <td>${r.risk_band}</td>
+        <td>${r.probability}</td>
+        <td>₦${Number(r.recommended_amount || 0).toLocaleString()}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('historyLoading').style.display = 'none';
+    document.getElementById('historyTable').style.display = 'table';
+  } catch (err) {
+    document.getElementById('historyLoading').textContent = 'Failed to load history: ' + err.message;
+  }
+}
+</script>
+
+</body>
+</html>
