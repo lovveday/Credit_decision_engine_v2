@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
 <meta charset="UTF-8">
-<title>Credit Decision</title>
+<title>Credit Decision Engine</title>
 <style>
   :root {
     --brand-color: #1a56db;
@@ -14,12 +15,30 @@
     --approve-bg: #e7f7ee; --approve-border: #34a853;
     --refer-bg: #fff8e1;   --refer-border: #f5b400;
     --decline-bg: #fde8e8; --decline-border: #e02424;
+    --muted-bg: #f0f1f3;
+    --border-color: #ddd;
+    --input-border: #ccc;
+    --heading-color: #1a1a1a;
   }
-  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 820px; margin: 30px auto; padding: 0 20px; background: var(--bg); color: var(--text); }
+  [data-theme="dark"] { --bg: #101827; --card-bg: #182335; --text: #edf3fb; --heading-color: #ffffff; --muted-bg: #243247; --border-color: #34445c; --input-border: #4a5d78; --approve-bg: #123426; --refer-bg: #3d3212; --decline-bg: #431d25; }
+  body { position: relative; isolation: isolate; font-family: -apple-system, Segoe UI, Arial, sans-serif; max-width: 820px; margin: 30px auto; padding: 0 20px; background: var(--bg); color: var(--text); transition: background .25s ease, color .25s ease; }
+  body::before { content: ""; position: fixed; z-index: -2; inset: 0; pointer-events: none; background: linear-gradient(120deg, rgba(26,86,219,0.08), transparent 42%, rgba(108,171,221,0.10)); background-size: 180% 180%; animation: ambientShift 18s ease-in-out infinite alternate; }
+  .ambient-wave { position: fixed; z-index: -1; left: -12%; bottom: -22vh; width: 124%; height: 42vh; pointer-events: none; opacity: 0.16; background: linear-gradient(110deg, #1a56db, #6cabdd 48%, #34a853); border-radius: 48% 52% 0 0 / 30% 38% 0 0; transform: rotate(-3deg); animation: waveRoll 12s ease-in-out infinite alternate; }
+  .ambient-wave::after { content: ""; position: absolute; inset: 18% -3% -8%; background: linear-gradient(110deg, #6cabdd, #1a56db 55%, #34a853); border-radius: 52% 48% 0 0 / 34% 30% 0 0; transform: rotate(4deg); opacity: 0.55; animation: waveRoll 9s ease-in-out infinite alternate-reverse; }
   header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .brand-logo { width: 34px; height: 34px; border-radius: 8px; background: var(--brand-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
-  h1 { font-size: 22px; margin: 0; }
+  .brand-logo { position: relative; width: 34px; height: 34px; border-radius: 8px; background: var(--brand-color); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; box-shadow: 0 6px 16px rgba(26,86,219,0.24); }
+  .brand-logo::after { content: ""; position: absolute; inset: -5px; border: 1px solid rgba(26,86,219,0.35); border-top-color: #34a853; border-radius: 11px; animation: decisionRoll 6s linear infinite; }
+  h1 { font-size: 22px; margin: 0; color: var(--heading-color); }
   .subtitle { color: #666; margin-bottom: 20px; font-size: 14px; }
+  [data-theme="dark"] .subtitle, [data-theme="dark"] .hint, [data-theme="dark"] #loading, [data-theme="dark"] #historyLoading { color: #d8e3f2; }
+  [data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3, [data-theme="dark"] legend,
+  [data-theme="dark"] label, [data-theme="dark"] td, [data-theme="dark"] th,
+  [data-theme="dark"] p, [data-theme="dark"] span, [data-theme="dark"] summary { color: #ffffff; }
+  [data-theme="dark"] .tab-btn { color: #d8e3f2; }
+  [data-theme="dark"] #loggedInAs { color: #d8e3f2 !important; }
+  [data-theme="dark"] [style*="color:#666"], [data-theme="dark"] [style*="color: #666"],
+  [data-theme="dark"] [style*="color:#888"], [data-theme="dark"] [style*="color: #888"] { color: #d8e3f2 !important; }
+  .theme-toggle { position: fixed; top: 16px; right: 18px; z-index: 10; border: 1px solid var(--border-color); border-radius: 999px; padding: 7px 11px; background: var(--card-bg); color: var(--text); cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.10); }
 
   .tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 2px solid #e0e0e0; }
   .tab-btn { padding: 10px 18px; background: none; border: none; cursor: pointer; font-size: 14px; color: #666; border-bottom: 3px solid transparent; margin-bottom: -2px; }
@@ -27,11 +46,11 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
 
-  fieldset { border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; padding: 16px; background: var(--card-bg); }
+  fieldset { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 16px; padding: 16px; background: var(--card-bg); }
   legend { font-weight: 600; padding: 0 6px; }
   label { display: block; font-size: 13px; margin-top: 10px; margin-bottom: 3px; color: #333; }
-  input, select { width: 100%; padding: 7px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
-  input[readonly] { background: #f0f1f3; color: #555; }
+  input, select { width: 100%; padding: 7px 8px; border: 1px solid var(--input-border); border-radius: 5px; font-size: 14px; box-sizing: border-box; background: var(--card-bg); color: var(--text); }
+  input[readonly] { background: var(--muted-bg); color: #555; }
   .row { display: flex; gap: 12px; }
   .row > div { flex: 1; }
   button.submit { margin-top: 20px; width: 100%; padding: 12px; background: var(--brand-color); color: #fff; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
@@ -49,41 +68,109 @@
   .hidden-section { display: none; }
 
   table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; }
-  th, td { padding: 8px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; }
-  th { background: #f0f1f3; font-weight: 600; }
+  th, td { padding: 8px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border-color); }
+  th { background: var(--muted-bg); font-weight: 600; }
   .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
   .badge.Approve { background: var(--approve-bg); color: var(--approve-border); }
   .badge.Refer { background: var(--refer-bg); color: #a67c00; }
   .badge.Decline { background: var(--decline-bg); color: var(--decline-border); }
   #historyLoading { color: #666; font-size: 14px; }
+  .simulator-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .simulator-grid label { margin-top: 0; }
+  #simulationResult { margin-top: 16px; }
+  @media (max-width: 640px) { .simulator-grid { grid-template-columns: 1fr; } }
+
+  #authScreen { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
+  .auth-box { background: var(--card-bg); padding: 30px; border-radius: 10px; width: 320px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+  .auth-form.hidden-section { display: none; }
+  .auth-error { color: #e02424; font-size: 13px; margin-top: 8px; min-height: 16px; }
+  #logoutBtn { background: none; color: #c62828; border: 1px solid #c62828; border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; margin-left: auto; }
+  #logoutBtn:hover { background: #c62828; color: #fff; }
+  [data-theme="dark"] #logoutBtn { color: #ff6b6b; border-color: #ff6b6b; }
+  [data-theme="dark"] #logoutBtn:hover { background: #c62828; color: #fff; border-color: #c62828; }
+  header { justify-content: space-between; }
+
 
   footer { text-align: center; margin-top: 40px; padding: 18px 0; font-size: 13px; color: var(--mancity-blue); font-weight: 600; }
+
   label:has(+ input:required)::after,
   label:has(+ select:required)::after {
-  content: " *";
-  color: #e02424;
-  font-weight: 700;
-}
+    content: " *";
+    color: #e02424;
+    font-weight: 700;
+  }
+  @keyframes ambientShift { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
+  @keyframes waveRoll { from { transform: translate3d(-2%, 0, 0) rotate(-3deg) scaleX(1); } to { transform: translate3d(2%, -10px, 0) rotate(3deg) scaleX(1.04); } }
+  @keyframes decisionRoll { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { body::before, .ambient-wave, .ambient-wave::after, .brand-logo::after { animation: none; } }
 </style>
 </head>
 <body>
+
+<div class="ambient-wave" aria-hidden="true"></div>
+<button type="button" class="theme-toggle" id="themeToggle" aria-label="Switch theme">Dark theme</button>
+
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="brand-logo" style="margin: 0 auto 12px;">CD</div>
+    <h2 style="text-align:center;margin-top:0">Credit Decision Engine</h2>
+    <div id="authTabs" class="tabs" style="justify-content:center">
+      <button class="tab-btn active" data-auth="loginForm">Log In</button>
+      <button class="tab-btn" data-auth="signupForm">Sign Up</button>
+    </div>
+
+    <form id="loginForm" class="auth-form">
+      <label>Email</label>
+      <input required type="email" id="loginEmail">
+      <label>Password</label>
+      <input required type="password" id="loginPassword">
+      <button type="submit" class="submit">Log In</button>
+      <div id="loginError" class="auth-error"></div>
+    </form>
+
+    <form id="signupForm" class="auth-form hidden-section">
+      <label>Email</label>
+      <input required type="email" id="signupEmail">
+      <label>Password</label>
+      <input required type="password" id="signupPassword" minlength="8">
+      <button type="submit" class="submit">Sign Up</button>
+      <div id="signupError" class="auth-error"></div>
+    </form>
+  </div>
+</div>
+
+<div id="appRoot" class="hidden-section">
 <header>
-  <div class="brand-logo">CD</div>
-  <h1>Credit Decision Engine</h1>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="brand-logo">CD</div>
+    <h1>Credit Decision Engine</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#666">
+    <span id="loggedInAs"></span>
+    <button id="logoutBtn">Log out</button>
+  </div>
 </header>
 <div class="subtitle">Applicant scoring — ML risk model + business rules + bank statement verification</div>
 
 <div class="tabs">
   <button class="tab-btn active" data-tab="newApp">New Application</button>
+  <button class="tab-btn" data-tab="bankStatementTab">Bank Statement</button>
+  <button class="tab-btn" data-tab="creditBureauTab">Credit Bureau</button>
   <button class="tab-btn" data-tab="history">Application History</button>
+  <button class="tab-btn" data-tab="simulator">Decision Simulator</button>
 </div>
 
 <div class="tab-content active" id="newApp">
-<form id="applicantForm">
+<form id="applicantForm" novalidate>
 
   <fieldset>
     <legend>Identity (KYC)</legend>
     <div class="row">
+      <div><label>BVN</label><input pattern="\d{11}" maxlength="11" id="BVN"></div>
+      <div><label>NIN</label><input required pattern="\d{11}" maxlength="11" id="NIN"></div>
+    </div>
+    <div class="hint" id="identityStatus">Enter BVN/NIN first — name, phone, and date of birth auto-fill below when found.</div>
+    <div class="row" style="margin-top:10px">
       <div><label>First Name</label><input required id="FIRST_NAME"></div>
       <div><label>Middle Name</label><input id="MIDDLE_NAME"></div>
       <div><label>Last Name</label><input required id="LAST_NAME"></div>
@@ -92,11 +179,7 @@
       <div><label>Date of Birth</label><input required type="date" id="DATE_OF_BIRTH"></div>
       <div><label>Phone Number</label><input required pattern="\d{11}" maxlength="11" id="PHONE_NUMBER"></div>
     </div>
-    <div class="row">
-      <div><label>BVN</label><input required pattern="\d{11}" maxlength="11" id="BVN"></div>
-      <div><label>NIN</label><input required pattern="\d{11}" maxlength="11" id="NIN"></div>
-    </div>
-    <div class="hint">Phone, BVN, NIN must be exactly 11 digits.</div>
+    <div class="hint">NIN and phone must be exactly 11 digits. BVN is optional during testing; if provided, it must be exactly 11 digits.</div>
   </fieldset>
 
   <fieldset>
@@ -128,7 +211,7 @@
         <div><label>Employer / Business Name</label><input required id="EMPLOYER_NAME"></div>
         <div><label>Employment Start Date</label><input required type="date" id="EMPLOYMENT_START_DATE"></div>
       </div>
-      <label>Years Employed</label>
+      <label>Years Employed (auto-calculated)</label>
       <input readonly id="YEARS_EMPLOYED_DISPLAY">
     </div>
 
@@ -142,7 +225,7 @@
         <div><label>Start Date</label><input required type="date" id="PREV_START_DATE"></div>
         <div><label>End Date</label><input required type="date" id="PREV_END_DATE"></div>
       </div>
-      <label>Years of Experience</label>
+      <label>Years of Experience (auto-calculated)</label>
       <input readonly id="PREV_YEARS_DISPLAY">
     </div>
 
@@ -229,27 +312,17 @@
     </div>
   </fieldset>
 
-  <fieldset>
-    <legend>Financial</legend>
-    <div class="row">
-      <div><label>Monthly Income (NGN)</label><input required type="number" id="AMT_INCOME_TOTAL"></div>
-      <div><label>Requested Credit Amount</label><input required type="number" id="AMT_CREDIT"></div>
-    </div>
-    <div class="row">
-      <div><label>Annuity (Repayment Amount)</label><input required type="number" id="AMT_ANNUITY"></div>
-      <div><label>Goods/Asset Price (if applicable)</label><input type="number" id="AMT_GOODS_PRICE"></div>
-    </div>
-    <div class="hint" id="incomeHint"></div>
-  </fieldset>
+
 
   <fieldset>
     <legend>Credit Bureau Scores</legend>
+    <div id="bureauStatus" class="hint">Enter BVN and NIN above to auto-fetch bureau scores.</div>
     <div class="row">
-      <div><label>External Score 1 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_1"></div>
-      <div><label>External Score 2 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_2"></div>
-      <div><label>External Score 3 (0-1)</label><input required type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_3"></div>
+      <div><label>CRC Credit Bureau (0-1)</label><input type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_1"></div>
+      <div><label>CreditRegistry (0-1)</label><input type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_2"></div>
+      <div><label>XDS Credit Bureau (0-1)</label><input type="number" step="0.01" min="0" max="1" id="EXT_SOURCE_3"></div>
     </div>
-    <div class="hint">this come from a credit bureau API.</div>
+    <div class="hint">Optional — auto-filled from bureau lookup if available, or from the Credit Bureau tab. Not required to submit; missing scores are handled automatically.</div>
   </fieldset>
 
   <fieldset>
@@ -270,29 +343,67 @@
     </div>
     <div class="row" style="margin-top:10px">
       <div><label>Number of Children</label><input required type="number" id="CNT_CHILDREN" value="0"></div>
-      <div><label>Own a Car?</label><select required id="FLAG_OWN_CAR"><option value="">-- Select --</option><option>YES</option><option>NO</option></select></div>
-      <div><label>Own Real Estate?</label><select required id="FLAG_OWN_REALTY"><option value="">-- Select --</option><option>YES</option><option>NO</option></select></div>
+      <div><label>Own a Car?</label><select required id="FLAG_OWN_CAR"><option value="">-- Select --</option><option>Y</option><option>N</option></select></div>
+      <div><label>Own Real Estate?</label><select required id="FLAG_OWN_REALTY"><option value="">-- Select --</option><option>Y</option><option>N</option></select></div>
     </div>
   </fieldset>
 
   <fieldset>
     <legend>Location</legend>
-    <div class="row">
-      <div><label>Region Population Density (0-0.1)</label><input required type="number" step="0.001" id="REGION_POPULATION_RELATIVE" value="0.02"></div>
-      <div><label>Region Rating (1=best, 3=worst)</label>
-        <select required id="REGION_RATING_CLIENT"><option value="">-- Select --</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+    <label>State of Residence</label>
+    <select required id="STATE_OF_RESIDENCE"></select>
+    <div id="stateInfo" class="hint"></div>
+
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-size:12px;color:#666">What do these tiers mean?</summary>
+      <div style="font-size:12px;color:#666;margin-top:6px;line-height:1.5">
+        States are grouped using public NBS/BudgIT economic data (Internally Generated Revenue and GDP), not staff opinion:<br>
+        <b>Tier 1</b> — highest economic activity (Lagos, FCT, Rivers)<br>
+        <b>Tier 2</b> — strong secondary economic hubs (Ogun, Kano, Oyo, Kaduna, Delta, Anambra, Akwa Ibom, Imo, Enugu, Edo)<br>
+        <b>Tier 3</b> — moderate economic activity (most other states)<br>
+        <b>Tier 4</b> — lowest recorded economic activity on record; these applications are automatically sent for <b>manual review</b> (never auto-declined) so a human always makes the final call on location-sensitive cases.<br>
+        <span style="color:#a67c00">Note: location correlates with religion/ethnicity in Nigeria — this is why Tier 4 routes to review, never auto-decline.</span>
       </div>
-    </div>
-    <div class="checkbox-row"><input type="checkbox" id="REG_CITY_NOT_LIVE_CITY"><label style="margin:0">Registered city differs from city of residence</label></div>
+    </details>
+
+    <input type="hidden" id="REGION_POPULATION_RELATIVE">
+    <input type="hidden" id="REGION_RATING_CLIENT">
+
+    <div class="checkbox-row" style="margin-top:10px"><input type="checkbox" id="REG_CITY_NOT_LIVE_CITY"><label style="margin:0">Registered city differs from city of residence</label></div>
     <div class="checkbox-row"><input type="checkbox" id="REG_REGION_NOT_LIVE_REGION"><label style="margin:0">Registered region differs from region of residence</label></div>
   </fieldset>
 
   <fieldset>
-    <legend>Bank Statement (optional)</legend>
-    <label>Upload statement (PDF / CSV / DOCX / image)</label>
-    <input type="file" id="statementFile">
-    <label style="margin-top:10px">Password (if the PDF is protected)</label>
-    <input type="password" id="statementPassword">
+    <legend>Bank Statement &amp; Credit Bureau</legend>
+    <div id="bankStatementStatus" class="hint">Bank statement: not checked. Use the "Bank Statement" tab above.</div>
+    <div id="creditReportStatus" class="hint">Credit report: not checked. Use the "Credit Bureau" tab above.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Financial</legend>
+    <div class="row">
+      <div><label>Monthly Income (NGN)</label><input required type="number" id="AMT_INCOME_TOTAL"></div>
+      <div><label>Requested Credit Amount</label><input required type="number" id="AMT_CREDIT"></div>
+    </div>
+    <div class="hint" id="incomeHint"></div>
+
+    <div class="row" style="margin-top:10px">
+      <div><label>Existing Debt / Total Owed (NGN)</label><input type="number" id="EXISTING_DEBT" value="0"></div>
+      <div style="display:flex;align-items:flex-end">
+        <div class="checkbox-row" style="margin-top:0"><input type="checkbox" id="SUBTRACT_DEBT"><label style="margin:0">Subtract from requested amount</label></div>
+      </div>
+    </div>
+    <div class="hint" id="netAmountHint"></div>
+
+    <div class="row" style="margin-top:10px">
+      <div><label>Interest Rate (annual %)</label><input type="number" step="0.1" id="INTEREST_RATE" value="24"></div>
+      <input type="hidden" id="TENURE_MONTHS" value="12">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Assessment Repayment (auto-calculated)</label><input required readonly type="number" id="AMT_ANNUITY"></div>
+      <div><label>Goods/Asset Price (if applicable)</label><input type="number" id="AMT_GOODS_PRICE"></div>
+    </div>
+    <div class="hint">The engine recommends the repayment tenure after it makes the decision.</div>
   </fieldset>
 
   <button type="submit" class="submit">Get Decision</button>
@@ -300,6 +411,42 @@
 
 <div id="loading">Hold on, we're reviewing this application…</div>
 <div id="result"></div>
+</div>
+
+<div class="tab-content" id="bankStatementTab">
+  <fieldset>
+    <legend>Upload &amp; Check Bank Statement</legend>
+    <label>Statement file (PDF / CSV / DOCX / image)</label>
+    <input type="file" id="tabStatementFile">
+    <label style="margin-top:10px">Password (if the PDF is protected)</label>
+    <input type="password" id="tabStatementPassword">
+
+    <div class="checkbox-row"><input type="checkbox" id="addSecondStatement"><label style="margin:0">Add a second account to merge (customer has multiple accounts)</label></div>
+    <div id="secondStatementBlock" class="hidden-section">
+      <label style="margin-top:10px">Second statement file</label>
+      <input type="file" id="tabStatementFile2">
+      <label style="margin-top:10px">Password (if protected)</label>
+      <input type="password" id="tabStatementPassword2">
+    </div>
+
+    <button type="button" class="submit" id="checkStatementBtn" style="margin-top:14px">Check Information</button>
+  </fieldset>
+  <div id="statementLoading" class="hint" style="display:none">Reading statement…</div>
+  <div id="statementReport" style="display:none"></div>
+</div>
+
+<div class="tab-content" id="creditBureauTab">
+  <fieldset>
+    <legend>Upload &amp; Check Credit Bureau Report</legend>
+    <div class="hint">Download the applicant's credit report from CRC/CreditRegistry/XDS and upload it here.</div>
+    <label style="margin-top:10px">Credit report file (PDF / image)</label>
+    <input type="file" id="tabCreditFile">
+    <label style="margin-top:10px">Password (if the PDF is protected)</label>
+    <input type="password" id="tabCreditPassword">
+    <button type="button" class="submit" id="checkCreditBtn" style="margin-top:14px">Check Information</button>
+  </fieldset>
+  <div id="creditLoading" class="hint" style="display:none">Reading credit report…</div>
+  <div id="creditReportDisplay" style="display:none"></div>
 </div>
 
 <div class="tab-content" id="history">
@@ -312,13 +459,156 @@
   </table>
 </div>
 
+<div class="tab-content" id="simulator">
+  <fieldset>
+    <legend>Scenario</legend>
+    <div class="hint">Run a temporary scenario using the latest application. Simulations are not saved to history.</div>
+    <div class="simulator-grid" style="margin-top:12px">
+      <div><label for="simIncome">Income</label><input type="number" id="simIncome" min="1" step="1000"></div>
+      <div><label for="simCredit">Requested Credit</label><input type="number" id="simCredit" min="1" step="1000"></div>
+      <div><label for="simRegion">Region Risk Tier</label>
+        <select id="simRegion"><option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option></select>
+      </div>
+    </div>
+    <button type="button" class="submit" id="runSimulationBtn" style="margin-top:14px">Run Scenario</button>
+  </fieldset>
+  <div id="simulationLoading" class="hint" style="display:none">Running scenario…</div>
+  <div id="simulationResult"></div>
+</div>
+
 <footer>
   Built with ❤️ by lovveday<br>
   ©lovveday 2026
 </footer>
 
 <script>
+// ==================== Auth ====================
+function authHeader() {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+function showApp(email) {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appRoot').classList.remove('hidden-section');
+  document.getElementById('loggedInAs').textContent = email;
+}
+
+function showAuthScreen() {
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('appRoot').classList.add('hidden-section');
+}
+
+// on load: if we have a token, verify it's still valid
+(async function initAuth() {
+  const token = localStorage.getItem('token');
+  const email = localStorage.getItem('email');
+  if (!token) { showAuthScreen(); return; }
+  try {
+    const res = await fetch('/me', { headers: authHeader() });
+    if (res.ok) { showApp(email); } else { localStorage.clear(); showAuthScreen(); }
+  } catch (e) { showAuthScreen(); }
+})();
+
+document.querySelectorAll('#authTabs .tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#authTabs .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('loginForm').classList.toggle('hidden-section', btn.dataset.auth !== 'loginForm');
+    document.getElementById('signupForm').classList.toggle('hidden-section', btn.dataset.auth !== 'signupForm');
+  });
+});
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Login failed'; return; }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('email', data.email);
+    showApp(data.email);
+  } catch (err) { errEl.textContent = 'Login failed: ' + err.message; }
+});
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('signupEmail').value;
+  const password = document.getElementById('signupPassword').value;
+  const errEl = document.getElementById('signupError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Signup failed'; return; }
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('email', data.email);
+    showApp(data.email);
+  } catch (err) { errEl.textContent = 'Signup failed: ' + err.message; }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.clear();
+  showAuthScreen();
+});
+
 // ==================== Occupation lists per employment category ====================
+// Nigeria states with economic tier (from NBS IGR / BudgIT GDP data — see
+// discussion in-app) and 2023-estimate population density (per km²) where
+// sourced; unsourced states use a reasonable estimate. Tier boundaries are
+// a starting point pulled from public data — review before treating as
+// final lending policy. Tier 1 = highest activity, Tier 4 = lowest
+// (auto-Refer, never auto-Decline — see decision_engine.py).
+const STATE_DATA = {
+  "Lagos": { tier: 1, density: 4715 }, "FCT": { tier: 1, density: 657 }, "Rivers": { tier: 1, density: 750 },
+  "Ogun": { tier: 2, density: 450 }, "Kano": { tier: 2, density: 807 }, "Oyo": { tier: 2, density: 230 },
+  "Kaduna": { tier: 2, density: 181 }, "Delta": { tier: 2, density: 350 }, "Anambra": { tier: 2, density: 1500 },
+  "Akwa Ibom": { tier: 2, density: 450 }, "Imo": { tier: 2, density: 1000 }, "Enugu": { tier: 2, density: 754 },
+  "Edo": { tier: 2, density: 290 },
+  "Abia": { tier: 3, density: 924 }, "Adamawa": { tier: 3, density: 142 }, "Bauchi": { tier: 3, density: 164 },
+  "Bayelsa": { tier: 3, density: 200 }, "Benue": { tier: 3, density: 150 }, "Borno": { tier: 3, density: 100 },
+  "Cross River": { tier: 3, density: 208 }, "Ebonyi": { tier: 3, density: 700 }, "Ekiti": { tier: 3, density: 350 },
+  "Gombe": { tier: 3, density: 229 }, "Jigawa": { tier: 3, density: 230 }, "Katsina": { tier: 3, density: 384 },
+  "Kogi": { tier: 3, density: 169 }, "Kwara": { tier: 3, density: 116 }, "Nasarawa": { tier: 3, density: 110 },
+  "Niger": { tier: 3, density: 55 }, "Ondo": { tier: 3, density: 220 }, "Osun": { tier: 3, density: 285 },
+  "Plateau": { tier: 3, density: 175 }, "Sokoto": { tier: 3, density: 150 }, "Zamfara": { tier: 3, density: 139 },
+  "Kebbi": { tier: 4, density: 110 }, "Taraba": { tier: 4, density: 80 }, "Yobe": { tier: 4, density: 96 },
+};
+
+const populateStateDropdown = () => {
+  const select = document.getElementById('STATE_OF_RESIDENCE');
+  select.innerHTML = '<option value="">-- Select --</option>' +
+    Object.keys(STATE_DATA).sort().map(s => `<option>${s}</option>`).join('');
+};
+populateStateDropdown();
+
+const densities = Object.values(STATE_DATA).map(s => s.density);
+const minDensity = Math.min(...densities), maxDensity = Math.max(...densities);
+
+document.getElementById('STATE_OF_RESIDENCE').addEventListener('change', function() {
+  const state = STATE_DATA[this.value];
+  const info = document.getElementById('stateInfo');
+  if (!state) { info.textContent = ''; return; }
+
+  const rpr = 0.005 + ((state.density - minDensity) / (maxDensity - minDensity)) * 0.075;
+  document.getElementById('REGION_POPULATION_RELATIVE').value = rpr.toFixed(4);
+  document.getElementById('REGION_RATING_CLIENT').value = state.tier;
+
+  const tierLabel = { 1: 'Tier 1 — highest activity', 2: 'Tier 2 — strong hub', 3: 'Tier 3 — moderate', 4: 'Tier 4 — lowest on record (routes to manual review)' }[state.tier];
+  info.textContent = tierLabel;
+  info.style.color = state.tier === 4 ? '#a67c00' : '#888';
+});
+
 const OCCUPATION_LISTS = {
   "Salaried employee": [
     "Private sector employee","Public/Government employee","NGO/Non-profit employee",
@@ -394,26 +684,6 @@ const currentEmployerBlock = document.getElementById('currentEmployerBlock');
 const previousEmploymentBlock = document.getElementById('previousEmploymentBlock');
 const businessBlock = document.getElementById('businessBlock');
 
-function setRequiredFor(selector, required) {
-  document.querySelectorAll(selector).forEach(field => {
-    field.required = required;
-  });
-}
-
-function updateEmploymentRequirements(status) {
-  const hasOccupationList = Object.prototype.hasOwnProperty.call(OCCUPATION_LISTS, status);
-  const hasCurrentEmployment = ["Salaried employee", "Informal worker", "Professional"].includes(status);
-  const hasPreviousEmployment = ["Unemployed", "Retired"].includes(status);
-  const isSelfEmployed = status === "Self-employed";
-
-  setRequiredFor('#occupationBlock select', hasOccupationList);
-  setRequiredFor('#currentEmployerBlock input:not([readonly]), #currentEmployerBlock select', hasCurrentEmployment);
-  setRequiredFor('#previousEmploymentBlock input:not([readonly]), #previousEmploymentBlock select', hasPreviousEmployment);
-  setRequiredFor('#businessBlock input:not([readonly]):not(#CAC_NUMBER), #businessBlock select', isSelfEmployed);
-  setRequiredFor('#CAC_NUMBER', false);
-  document.getElementById('OCCUPATION_OTHER').required = hasOccupationList && occupationSelect.value === 'Other';
-}
-
 empStatusSelect.addEventListener('change', () => {
   const status = empStatusSelect.value;
   const hasOccupationList = OCCUPATION_LISTS.hasOwnProperty(status);
@@ -429,16 +699,12 @@ empStatusSelect.addEventListener('change', () => {
       '<option value="Other">Other (please specify)</option>';
   }
 
-  updateEmploymentRequirements(status);
   updateIncomeHint();
 });
 
 occupationSelect.addEventListener('change', () => {
   occupationOtherBlock.classList.toggle('hidden-section', occupationSelect.value !== 'Other');
-  document.getElementById('OCCUPATION_OTHER').required = occupationSelect.value === 'Other';
 });
-
-updateEmploymentRequirements(empStatusSelect.value);
 
 // ==================== Auto-calculated fields ====================
 document.getElementById('DATE_OF_BIRTH').addEventListener('change', function() {});
@@ -475,9 +741,7 @@ function updateBusinessProfit() {
 }
 
 document.getElementById('BUSINESS_REG_STATUS').addEventListener('change', function() {
-  const isRegistered = this.value === 'Registered (CAC)';
-  document.getElementById('cacBlock').classList.toggle('hidden-section', !isRegistered);
-  document.getElementById('CAC_NUMBER').required = isRegistered;
+  document.getElementById('cacBlock').classList.toggle('hidden-section', this.value !== 'Registered (CAC)');
 });
 
 function updateIncomeHint() {
@@ -487,6 +751,195 @@ function updateIncomeHint() {
   } else {
     hint.textContent = '';
   }
+}
+
+// ==================== Repayment calculator & existing debt ====================
+function getEffectivePrincipal() {
+  const requested = parseFloat(document.getElementById('AMT_CREDIT').value) || 0;
+  const debt = parseFloat(document.getElementById('EXISTING_DEBT').value) || 0;
+  const subtract = document.getElementById('SUBTRACT_DEBT').checked;
+  return subtract ? Math.max(0, requested - debt) : requested;
+}
+
+function updateNetAmountHint() {
+  const requested = parseFloat(document.getElementById('AMT_CREDIT').value) || 0;
+  const debt = parseFloat(document.getElementById('EXISTING_DEBT').value) || 0;
+  const subtract = document.getElementById('SUBTRACT_DEBT').checked;
+  const hint = document.getElementById('netAmountHint');
+  if (debt > 0) {
+    hint.textContent = subtract
+      ? `Net amount used for calculation: ${formatMoney(Math.max(0, requested - debt))} (existing debt subtracted)`
+      : `Existing debt noted (${formatMoney(debt)}) but not subtracted from requested amount — operator's choice.`;
+  } else {
+    hint.textContent = '';
+  }
+}
+
+function calculateRepayment() {
+  const principal = getEffectivePrincipal();
+  const annualRate = parseFloat(document.getElementById('INTEREST_RATE').value) || 0;
+  const tenure = parseInt(document.getElementById('TENURE_MONTHS').value) || 0;
+  if (!principal || !tenure) return;
+
+  const monthlyRate = annualRate / 12 / 100;
+  let payment;
+  if (monthlyRate > 0) {
+    payment = principal * monthlyRate / (1 - Math.pow(1 + monthlyRate, -tenure));
+  } else {
+    payment = principal / tenure;
+  }
+  document.getElementById('AMT_ANNUITY').value = Math.round(payment);
+  updateNetAmountHint();
+}
+
+['AMT_CREDIT', 'EXISTING_DEBT', 'INTEREST_RATE', 'TENURE_MONTHS'].forEach(id => {
+  document.getElementById(id).addEventListener('input', calculateRepayment);
+});
+document.getElementById('SUBTRACT_DEBT').addEventListener('change', calculateRepayment);
+
+// ==================== Bank Statement & Credit Bureau reports ====================
+let cachedBankStatement = null;
+let cachedCreditReport = null;
+let lastDecisionPayload = null;
+
+function formatMoney(n) {
+  return '₦' + Number(n || 0).toLocaleString();
+}
+
+document.getElementById('addSecondStatement').addEventListener('change', function() {
+  document.getElementById('secondStatementBlock').classList.toggle('hidden-section', !this.checked);
+});
+
+document.getElementById('checkStatementBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('tabStatementFile');
+  if (!fileInput.files.length) { alert('Choose a statement file first.'); return; }
+
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  const pw = document.getElementById('tabStatementPassword').value;
+  if (pw) fd.append('password', pw);
+
+  if (document.getElementById('addSecondStatement').checked) {
+    const file2Input = document.getElementById('tabStatementFile2');
+    if (file2Input.files.length) {
+      fd.append('file2', file2Input.files[0]);
+      const pw2 = document.getElementById('tabStatementPassword2').value;
+      if (pw2) fd.append('password2', pw2);
+    }
+  }
+
+  document.getElementById('statementLoading').style.display = 'block';
+  document.getElementById('statementReport').style.display = 'none';
+
+  try {
+    const res = await fetch('/parse-statement', { method: 'POST', headers: authHeader(), body: fd });
+    const data = await res.json();
+    cachedBankStatement = data;
+    renderStatementReport(data);
+    document.getElementById('bankStatementStatus').textContent =
+      data.parsed_successfully ? 'Bank statement: checked ✓' : 'Bank statement: could not be read — see Bank Statement tab.';
+  } catch (err) {
+    alert('Failed to check statement: ' + err.message);
+  } finally {
+    document.getElementById('statementLoading').style.display = 'none';
+  }
+});
+
+function renderStatementReport(data) {
+  const el = document.getElementById('statementReport');
+  el.style.display = 'block';
+  if (!data.parsed_successfully) {
+    el.innerHTML = `<p style="color:#e02424">Could not read this statement. ${data.error || ''}</p>`;
+    return;
+  }
+  let html = `
+    <div class="row">
+      <div><b>Total Inflow:</b> ${formatMoney(data.total_inflow)}</div>
+      <div><b>Total Outflow:</b> ${formatMoney(data.total_outflow)}</div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><b>Total Through Account:</b> ${formatMoney(data.total_amount_through_account)}</div>
+      <div><b>Ending Balance:</b> ${data.ending_balance != null ? formatMoney(data.ending_balance) : 'Not available'}</div>
+    </div>
+    <p style="margin-top:10px"><b>Transactions:</b> ${data.num_transactions} &nbsp; <b>Bounced:</b> ${data.bounced_count} &nbsp; <b>Source:</b> ${data.source}</p>
+  `;
+  if (data.category_breakdown && data.category_breakdown.length) {
+    html += `<p><b>Spending Behavior by Category:</b></p>
+      <table><thead><tr><th>Category</th><th>Amount</th><th>Count</th></tr></thead><tbody>`;
+    data.category_breakdown.forEach(c => {
+      html += `<tr><td>${c.category}</td><td>${formatMoney(c.amount)}</td><td>${c.count}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+  if (data.behavioral_profile) {
+    const p = data.behavioral_profile;
+    html += `<p style="margin-top:10px"><b>Behavioral Summary:</b> ${p.sustainability_verdict || ''}</p>`;
+  }
+  el.innerHTML = html;
+}
+
+document.getElementById('checkCreditBtn').addEventListener('click', async () => {
+  const fileInput = document.getElementById('tabCreditFile');
+  if (!fileInput.files.length) { alert('Choose a credit report file first.'); return; }
+
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  const pw = document.getElementById('tabCreditPassword').value;
+  if (pw) fd.append('password', pw);
+
+  document.getElementById('creditLoading').style.display = 'block';
+  document.getElementById('creditReportDisplay').style.display = 'none';
+
+  try {
+    const res = await fetch('/parse-credit-report', { method: 'POST', headers: authHeader(), body: fd });
+    const data = await res.json();
+    cachedCreditReport = data;
+    renderCreditReport(data);
+    document.getElementById('creditReportStatus').textContent =
+      data.parsed_successfully ? 'Credit report: checked ✓' : 'Credit report: could not be read — see Credit Bureau tab.';
+    if (data.parsed_successfully && data.total_outstanding_balance) {
+      document.getElementById('EXISTING_DEBT').value = data.total_outstanding_balance;
+      updateNetAmountHint();
+    }
+  } catch (err) {
+    alert('Failed to read credit report: ' + err.message);
+  } finally {
+    document.getElementById('creditLoading').style.display = 'none';
+  }
+});
+
+function renderCreditReport(data) {
+  const el = document.getElementById('creditReportDisplay');
+  el.style.display = 'block';
+  if (!data.parsed_successfully) {
+    el.innerHTML = `<p style="color:#e02424">Could not read this credit report. ${data.error || ''}</p>`;
+    return;
+  }
+  let html = `
+    <p><b>Bureau:</b> ${data.bureau_name}${data.report_reference ? ` &nbsp; <b>Reference:</b> ${data.report_reference}` : ''}</p>
+    <p><b>Report Date:</b> ${data.report_date || 'Not stated'}${data.report_purpose ? ` &nbsp; <b>Purpose:</b> ${data.report_purpose}` : ''}</p>
+    <p><b>Credit Score:</b> ${data.credit_score != null ? data.credit_score : 'Not stated'}${data.risk_grade ? ` &nbsp; <b>Grade:</b> ${data.risk_grade}` : ''}${data.overall_bureau_standing ? ` &nbsp; <b>Standing:</b> ${data.overall_bureau_standing}` : ''}</p>
+    <div class="row">
+      <div><b>Total Accounts:</b> ${data.total_accounts} &nbsp; <b>Active Facilities:</b> ${data.active_facilities || data.open_accounts}</div>
+      <div><b>Open:</b> ${data.open_accounts} &nbsp; <b>Closed:</b> ${data.closed_accounts}</div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div><b>Sanctioned Limit:</b> ${formatMoney(data.total_sanctioned_limit)}</div>
+      <div><b>Outstanding Balance:</b> ${formatMoney(data.total_outstanding_balance)}</div>
+    </div>
+    <p style="margin-top:8px"><b>Overdue:</b> ${formatMoney(data.total_overdue_amount)} &nbsp; <b>Max Historical DPD:</b> ${data.historic_max_days_past_due} days &nbsp; <b>Utilization:</b> ${data.credit_utilization_percent != null ? data.credit_utilization_percent + '%' : 'Not stated'}</p>
+    <p style="margin-top:8px"><b>Written-Off Accounts:</b> ${data.written_off_accounts} &nbsp; <b>Recent Enquiries:</b> ${data.recent_enquiries_count}</p>
+    <p style="margin-top:8px">${data.summary || ''}</p>
+  `;
+  if (data.loans && data.loans.length) {
+    html += `<p><b>Loan Details:</b></p>
+      <table><thead><tr><th>Lender</th><th>Type</th><th>Outstanding</th><th>Status</th><th>Arrears</th></tr></thead><tbody>`;
+    data.loans.forEach(l => {
+      html += `<tr><td>${l.lender_name}</td><td>${l.account_type}</td><td>${formatMoney(l.outstanding_balance)}</td><td>${l.status}</td><td>${l.months_in_arrears > 0 ? l.months_in_arrears + ' mo' : '-'}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+  el.innerHTML = html;
 }
 
 // ==================== Tab switching ====================
@@ -501,8 +954,97 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ==================== Form submit ====================
+
+// ==================== Bureau auto-lookup ====================
+async function tryBureauLookup() {
+  const bvn = document.getElementById('BVN').value;
+  const nin = document.getElementById('NIN').value;
+  const status = document.getElementById('bureauStatus');
+  if (!/^\d{11}$/.test(bvn) || !/^\d{11}$/.test(nin)) return;
+
+  status.textContent = 'Looking up bureau scores...';
+  try {
+    const res = await fetch(`/bureau-lookup?bvn=${bvn}&nin=${nin}`, { headers: authHeader() });
+    const data = await res.json();
+    if (!data.verified) {
+      status.textContent = 'Identity could not be verified — enter scores manually.';
+      return;
+    }
+    document.getElementById('EXT_SOURCE_1').value = data.EXT_SOURCE_1;
+    document.getElementById('EXT_SOURCE_2').value = data.EXT_SOURCE_2;
+    document.getElementById('EXT_SOURCE_3').value = data.EXT_SOURCE_3;
+    const names = data.bureaus.map(b => `${b.name}: ${b.score}`).join(', ');
+    status.textContent = 'Verified. Bureau scores: ' + names;
+  } catch (err) {
+    status.textContent = 'Bureau lookup failed — enter scores manually.';
+  }
+}
+document.getElementById('BVN').addEventListener('blur', tryBureauLookup);
+document.getElementById('NIN').addEventListener('blur', tryBureauLookup);
+
+async function lookupIdentityFromField(identifier) {
+  const value = document.getElementById(identifier).value.trim();
+  const identityStatus = document.getElementById('identityStatus');
+  if (!value && identifier === 'BVN') {
+    identityStatus.textContent = 'BVN lookup skipped. Enter a BVN to auto-fill identity details from Dojah.';
+    return;
+  }
+  if (!/^\d{11}$/.test(value)) {
+    identityStatus.textContent = `${identifier} must be exactly 11 digits.`;
+    return;
+  }
+
+  const query = identifier === 'BVN' ? `bvn=${encodeURIComponent(value)}` : `nin=${encodeURIComponent(value)}`;
+  identityStatus.textContent = `Verifying ${identifier}...`;
+  try {
+    const res = await fetch(`/kyc-lookup?${query}`, { headers: authHeader() });
+    const data = await res.json();
+    if (!res.ok || !data.verified) {
+      const sandboxHint = identifier === 'NIN' && ['127.0.0.1', 'localhost'].includes(location.hostname)
+        ? ' In Dojah sandbox, test with NIN 70123456789; real NINs require production credentials.'
+        : '';
+      identityStatus.textContent = (data.error || data.detail || `${identifier} could not be verified.`) + sandboxHint;
+      return;
+    }
+    if (data.first_name) document.getElementById('FIRST_NAME').value = data.first_name;
+    if (data.last_name) document.getElementById('LAST_NAME').value = data.last_name;
+    if (data.middle_name) document.getElementById('MIDDLE_NAME').value = data.middle_name;
+    if (data.phone_number) document.getElementById('PHONE_NUMBER').value = data.phone_number;
+    if (data.date_of_birth) document.getElementById('DATE_OF_BIRTH').value = data.date_of_birth;
+    identityStatus.textContent = `Identity verified from ${identifier}. Profile fields were populated.`;
+  } catch (err) {
+    identityStatus.textContent = `Identity lookup failed: ${err.message}`;
+  }
+}
+
+document.getElementById('BVN').addEventListener('blur', () => lookupIdentityFromField('BVN'));
+document.getElementById('NIN').addEventListener('blur', () => lookupIdentityFromField('NIN'));
+
+function validateApplicantForm() {
+  const form = document.getElementById('applicantForm');
+  const fields = [...form.querySelectorAll('input[required], select[required], textarea[required]')];
+  const invalidField = fields.find(field => {
+    const hiddenSection = field.closest('.hidden-section');
+    return (!hiddenSection || !hiddenSection.classList.contains('hidden-section')) && !field.checkValidity();
+  });
+
+  if (!invalidField) return true;
+
+  const label = form.querySelector(`label[for="${invalidField.id}"]`)
+    || invalidField.closest('div')?.querySelector('label');
+  const fieldName = label?.textContent.replace('*', '').trim() || invalidField.id;
+  const message = invalidField.validity.valueMissing
+    ? `${fieldName} is required.`
+    : `${fieldName} has an invalid value. Please check it.`;
+  alert(`Please complete the application before requesting a decision.\n\n${message}`);
+  invalidField.focus();
+  return false;
+}
+
 document.getElementById('applicantForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  calculateRepayment();
+  if (!validateApplicantForm()) return;
 
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
   const num = (id) => parseFloat(val(id)) || 0;
@@ -524,7 +1066,7 @@ document.getElementById('applicantForm').addEventListener('submit', async (e) =>
   }
 
   const income = num('AMT_INCOME_TOTAL');
-  const credit = num('AMT_CREDIT');
+  const credit = getEffectivePrincipal();
   const annuity = num('AMT_ANNUITY');
   const goods = num('AMT_GOODS_PRICE') || credit; // fall back to credit if no goods price given
 
@@ -538,6 +1080,7 @@ document.getElementById('applicantForm').addEventListener('submit', async (e) =>
     AMT_CREDIT: credit,
     AMT_ANNUITY: annuity,
     AMT_GOODS_PRICE: goods,
+    INTEREST_RATE: num('INTEREST_RATE'),
     EXT_SOURCE_1: ext1 ? parseFloat(ext1) : 0.5,
     EXT_SOURCE_2: ext2 ? parseFloat(ext2) : 0.5,
     EXT_SOURCE_3: ext3 ? parseFloat(ext3) : 0.5,
@@ -600,33 +1143,51 @@ document.getElementById('applicantForm').addEventListener('submit', async (e) =>
   formData.append('applicant_json', JSON.stringify(applicant));
   formData.append('profile_json', JSON.stringify(profile));
 
-  const fileInput = document.getElementById('statementFile');
-  if (fileInput.files.length > 0) formData.append('file', fileInput.files[0]);
-  const password = val('statementPassword');
-  if (password) formData.append('password', password);
+  lastDecisionPayload = {
+    applicant,
+    profile,
+    bankStatement: cachedBankStatement,
+    creditReport: cachedCreditReport,
+  };
+  populateSimulatorControls();
+
+  if (cachedBankStatement) {
+    formData.append('bank_statement_json', JSON.stringify(cachedBankStatement));
+  }
+  if (cachedCreditReport) {
+    formData.append('credit_report_json', JSON.stringify(cachedCreditReport));
+  }
 
   document.getElementById('loading').style.display = 'block';
   document.getElementById('result').style.display = 'none';
 
   try {
-    const res = await fetch('/score-full', { method: 'POST', body: formData });
+    const res = await fetch('/score-full', { method: 'POST', headers: authHeader(), body: formData });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || data.message || `Server error (${res.status})`);
+      throw new Error(data.detail || data.error || `Server returned ${res.status}`);
     }
     renderResult(data);
   } catch (err) {
-    const result = document.getElementById('result');
-    result.className = 'decline';
-    result.style.display = 'block';
-    result.innerHTML = `<h2>Request failed</h2><p>${err.message}</p>`;
+    alert('Decision request failed: ' + err.message);
   } finally {
     document.getElementById('loading').style.display = 'none';
   }
 });
 
-function renderResult(data) {
-  const el = document.getElementById('result');
+const themeToggle = document.getElementById('themeToggle');
+const savedTheme = localStorage.getItem('creditDecisionTheme') || 'light';
+document.documentElement.dataset.theme = savedTheme;
+themeToggle.textContent = savedTheme === 'dark' ? 'Light theme' : 'Dark theme';
+themeToggle.addEventListener('click', () => {
+  const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = nextTheme;
+  localStorage.setItem('creditDecisionTheme', nextTheme);
+  themeToggle.textContent = nextTheme === 'dark' ? 'Light theme' : 'Dark theme';
+});
+
+function renderResult(data, targetId = 'result') {
+  const el = document.getElementById(targetId);
   const cls = (data.decision || '').toLowerCase();
   el.className = cls;
   el.style.display = 'block';
@@ -637,7 +1198,15 @@ function renderResult(data) {
     html += `<p style="font-size:15px;line-height:1.5">${data.explanation.summary}</p>`;
   }
 
-  html += `<p><b>Risk Band:</b> ${data.risk_band} &nbsp; <b>Probability:</b> ${(data.probability*100).toFixed(0)}%</p>`;
+  const modelLikelihood = Number(data.probability || 0) * 100;
+  const compositeLikelihood = data.composite_probability != null
+    ? Number(data.composite_probability) * 100
+    : Number(data.default_likelihood_percent || 0);
+  const modelLikelihoodText = modelLikelihood < 0.1 && modelLikelihood > 0 ? '&lt;0.1' : modelLikelihood.toFixed(1);
+  html += `<p><b>Model Risk Band:</b> ${data.model_risk_band || data.risk_band} &nbsp; <b>Calibrated Model Likelihood:</b> ${modelLikelihoodText}% &nbsp; <b>Composite Risk Estimate:</b> ${compositeLikelihood.toFixed(1)}%</p>`;
+  if (data.decision_basis === 'policy_affordability') {
+    html += `<p><b>Final Decision:</b> Based on affordability policy after reviewing income, requested amount, and supporting evidence.</p>`;
+  }
   if (data.rule_triggered) html += `<p><b>Rule Triggered:</b> ${data.rule_triggered}</p>`;
 
   if (data.loan_recommendation) {
@@ -645,6 +1214,23 @@ function renderResult(data) {
     html += `<p><b>Recommended Max Credit:</b> ₦${Number(lr.recommended_max_credit).toLocaleString()}`;
     if (lr.recommended_tenure_months) html += ` over <b>${lr.recommended_tenure_months} months</b>`;
     html += `</p>`;
+    const decisionIsDecline = String(data.decision || '').toLowerCase() === 'decline';
+    if (!decisionIsDecline) {
+      html += `<p><b>Maximum Product Tenure:</b> ${lr.maximum_tenure_label || 'N/A'}`;
+      if (lr.credit_report_sanctioned_limit) html += ` &nbsp; <b>Credit Report Cap:</b> ${formatMoney(lr.credit_report_sanctioned_limit)}`;
+      html += `</p>`;
+      if (lr.verified_avg_monthly_inflow || lr.verified_avg_monthly_outflow) {
+        html += `<p><b>Verified Monthly Cash Flow:</b> Inflow ${formatMoney(lr.verified_avg_monthly_inflow)} · Outflow ${formatMoney(lr.verified_avg_monthly_outflow)} · Net ${formatMoney(lr.verified_monthly_net_cash_flow)}</p>`;
+      }
+      const statement = data.bank_statement_summary;
+      if (statement && statement.parsed_successfully) {
+        html += `<p><b>Statement Totals:</b> Inflow ${formatMoney(statement.total_inflow)} · Outflow ${formatMoney(statement.total_outflow)} · ${statement.num_transactions || 0} transactions across ${statement.months_covered || 0} month(s)</p>`;
+      }
+      html += `<p><b>Maximum Monthly Repayment:</b> ${formatMoney(lr.max_affordable_monthly_repayment)} <span style="font-size:12px;color:#666">(${lr.income_basis_label})</span></p>`;
+      if (lr.recommended_monthly_installment) {
+        html += `<p><b>Recommended Monthly Installment:</b> ${formatMoney(lr.recommended_monthly_installment)} &nbsp; <b>Total Repayment:</b> ${formatMoney(lr.recommended_total_repayment)}</p>`;
+      }
+    }
     html += `<p style="font-size:12px;color:#666">${lr.note}</p>`;
   }
 
@@ -657,7 +1243,11 @@ function renderResult(data) {
     data.top_risk_reasons.forEach(r => html += `<li>${r}</li>`);
     html += `</ul>`;
   }
-
+  if (data.adjustments && data.adjustments.length) {
+    html += `<p><b>Decision Adjustments:</b></p><ul class="reason-list">`;
+    data.adjustments.forEach(a => html += `<li><b>${a.source}:</b> ${a.reason} (${a.adjustment >= 0 ? '+' : ''}${(Number(a.adjustment) * 100).toFixed(1)} points)</li>`);
+    html += `</ul>`;
+  }
   if (data.bank_statement_summary) {
     const s = data.bank_statement_summary;
     html += `<p><b>Bank Statement:</b> ${s.num_transactions || 0} transactions found, ${s.bounced_count || 0} bounced (source: ${s.source || 'n/a'})</p>`;
@@ -670,11 +1260,61 @@ function renderResult(data) {
   el.innerHTML = html;
 }
 
+function populateSimulatorControls() {
+  if (!lastDecisionPayload) return;
+  const applicant = lastDecisionPayload.applicant;
+  document.getElementById('simIncome').value = applicant.AMT_INCOME_TOTAL || '';
+  document.getElementById('simCredit').value = applicant.AMT_CREDIT || '';
+  document.getElementById('simRegion').value = applicant.REGION_RATING_CLIENT || 2;
+}
+
+document.getElementById('runSimulationBtn').addEventListener('click', async () => {
+  if (!lastDecisionPayload) {
+    alert('Run a normal application decision first. The simulator uses that application as its starting point.');
+    return;
+  }
+
+  const applicant = { ...lastDecisionPayload.applicant };
+  applicant.AMT_INCOME_TOTAL = Number(document.getElementById('simIncome').value);
+  applicant.AMT_CREDIT = Number(document.getElementById('simCredit').value);
+  applicant.REGION_RATING_CLIENT = Number(document.getElementById('simRegion').value);
+  if (!applicant.AMT_INCOME_TOTAL || !applicant.AMT_CREDIT) {
+    alert('Enter a positive income and requested credit amount.');
+    return;
+  }
+  applicant.CREDIT_INCOME_RATIO = applicant.AMT_CREDIT / applicant.AMT_INCOME_TOTAL;
+  const tenure = 12;
+  const monthlyRate = (Number(applicant.INTEREST_RATE) || 0) / 12 / 100;
+  applicant.AMT_ANNUITY = monthlyRate > 0
+    ? applicant.AMT_CREDIT * monthlyRate / (1 - Math.pow(1 + monthlyRate, -tenure))
+    : applicant.AMT_CREDIT / tenure;
+  applicant.ANNUITY_INCOME_RATIO = applicant.AMT_ANNUITY / applicant.AMT_INCOME_TOTAL;
+
+  const formData = new FormData();
+  formData.append('applicant_json', JSON.stringify(applicant));
+  formData.append('profile_json', JSON.stringify(lastDecisionPayload.profile));
+  if (lastDecisionPayload.bankStatement) formData.append('bank_statement_json', JSON.stringify(lastDecisionPayload.bankStatement));
+  if (lastDecisionPayload.creditReport) formData.append('credit_report_json', JSON.stringify(lastDecisionPayload.creditReport));
+
+  const loading = document.getElementById('simulationLoading');
+  loading.style.display = 'block';
+  try {
+    const res = await fetch('/simulate', { method: 'POST', headers: authHeader(), body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.error || `Server returned ${res.status}`);
+    renderResult(data, 'simulationResult');
+  } catch (err) {
+    document.getElementById('simulationResult').textContent = 'Simulation failed: ' + err.message;
+  } finally {
+    loading.style.display = 'none';
+  }
+});
+
 async function loadHistory() {
   document.getElementById('historyLoading').style.display = 'block';
   document.getElementById('historyTable').style.display = 'none';
   try {
-    const res = await fetch('/applications');
+    const res = await fetch('/applications', { headers: authHeader() });
     const rows = await res.json();
     const tbody = document.getElementById('historyBody');
     tbody.innerHTML = '';
@@ -702,5 +1342,6 @@ async function loadHistory() {
 }
 </script>
 
+</div>
 </body>
 </html>

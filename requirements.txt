@@ -12,3 +12,7 @@ python-docx
 google-genai
 psycopg2-binary
 python-dotenv
+bcrypt
+PyJWT
+pydantic[email]
+requests
