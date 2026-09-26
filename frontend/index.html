@@ -83,6 +83,7 @@
   #authScreen { min-height: 80vh; display: flex; align-items: center; justify-content: center; }
   .auth-box { background: var(--card-bg); padding: 30px; border-radius: 10px; width: 320px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
   .auth-form.hidden-section { display: none; }
+  .auth-link { border: 0; background: none; color: var(--brand-color); cursor: pointer; padding: 8px 0; font-size: 13px; }
   .auth-error { color: #e02424; font-size: 13px; margin-top: 8px; min-height: 16px; }
   #logoutBtn { background: none; color: #c62828; border: 1px solid #c62828; border-radius: 5px; padding: 4px 10px; font-size: 12px; cursor: pointer; margin-left: auto; }
   #logoutBtn:hover { background: #c62828; color: #fff; }
@@ -124,6 +125,7 @@
       <input required type="email" id="loginEmail">
       <label>Password</label>
       <input required type="password" id="loginPassword">
+      <button type="button" id="forgotPasswordBtn" class="auth-link">Forgot password?</button>
       <button type="submit" class="submit">Log In</button>
       <div id="loginError" class="auth-error"></div>
     </form>
@@ -135,6 +137,24 @@
       <input required type="password" id="signupPassword" minlength="8">
       <button type="submit" class="submit">Sign Up</button>
       <div id="signupError" class="auth-error"></div>
+    </form>
+
+    <form id="forgotPasswordForm" class="auth-form hidden-section">
+      <h3>Reset your password</h3>
+      <label>Email</label>
+      <input required type="email" id="resetEmail">
+      <button type="submit" class="submit">Send reset link</button>
+      <button type="button" id="backToLoginBtn" class="auth-link">Back to log in</button>
+      <div id="forgotPasswordMessage" class="auth-error" aria-live="polite"></div>
+    </form>
+
+    <form id="resetPasswordForm" class="auth-form hidden-section">
+      <h3>Choose a new password</h3>
+      <label>New password</label>
+      <input required type="password" id="newPassword" minlength="8" autocomplete="new-password">
+      <button type="submit" class="submit">Reset password</button>
+      <button type="button" id="resetBackToLoginBtn" class="auth-link">Back to log in</button>
+      <div id="resetPasswordMessage" class="auth-error" aria-live="polite"></div>
     </form>
   </div>
 </div>
@@ -516,7 +536,73 @@ document.querySelectorAll('#authTabs .tab-btn').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('loginForm').classList.toggle('hidden-section', btn.dataset.auth !== 'loginForm');
     document.getElementById('signupForm').classList.toggle('hidden-section', btn.dataset.auth !== 'signupForm');
+    document.getElementById('forgotPasswordForm').classList.add('hidden-section');
+    document.getElementById('resetPasswordForm').classList.add('hidden-section');
   });
+});
+
+document.getElementById('forgotPasswordBtn').addEventListener('click', () => {
+  document.getElementById('loginForm').classList.add('hidden-section');
+  document.getElementById('signupForm').classList.add('hidden-section');
+  document.getElementById('authTabs').classList.add('hidden-section');
+  document.getElementById('forgotPasswordForm').classList.remove('hidden-section');
+});
+
+document.getElementById('backToLoginBtn').addEventListener('click', () => {
+  document.getElementById('forgotPasswordForm').classList.add('hidden-section');
+  document.getElementById('authTabs').classList.remove('hidden-section');
+  document.getElementById('loginForm').classList.remove('hidden-section');
+  document.querySelectorAll('#authTabs .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.auth === 'loginForm'));
+});
+
+document.getElementById('resetBackToLoginBtn').addEventListener('click', () => {
+  window.history.replaceState({}, document.title, window.location.pathname);
+  document.getElementById('resetPasswordForm').classList.add('hidden-section');
+  document.getElementById('authTabs').classList.remove('hidden-section');
+  document.getElementById('loginForm').classList.remove('hidden-section');
+  document.querySelectorAll('#authTabs .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.auth === 'loginForm'));
+});
+
+document.getElementById('forgotPasswordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = document.getElementById('forgotPasswordMessage');
+  message.textContent = '';
+  try {
+    const res = await fetch('/password-reset/request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: document.getElementById('resetEmail').value })
+    });
+    const data = await res.json();
+    message.textContent = res.ok ? data.message : (data.detail || 'Could not send reset link.');
+  } catch (err) { message.textContent = 'Could not send reset link: ' + err.message; }
+});
+
+const resetToken = new URLSearchParams(window.location.search).get('reset_token');
+if (resetToken) {
+  document.getElementById('authTabs').classList.add('hidden-section');
+  document.getElementById('loginForm').classList.add('hidden-section');
+  document.getElementById('signupForm').classList.add('hidden-section');
+  document.getElementById('resetPasswordForm').classList.remove('hidden-section');
+}
+
+document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const message = document.getElementById('resetPasswordMessage');
+  message.textContent = '';
+  try {
+    const res = await fetch('/password-reset/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: resetToken, password: document.getElementById('newPassword').value })
+    });
+    const data = await res.json();
+    if (!res.ok) { message.textContent = data.detail || 'Password reset failed.'; return; }
+    window.history.replaceState({}, document.title, window.location.pathname);
+    document.getElementById('resetPasswordForm').classList.add('hidden-section');
+    document.getElementById('authTabs').classList.remove('hidden-section');
+    document.getElementById('loginForm').classList.remove('hidden-section');
+    document.querySelectorAll('#authTabs .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.auth === 'loginForm'));
+    document.getElementById('loginError').textContent = data.message;
+  } catch (err) { message.textContent = 'Password reset failed: ' + err.message; }
 });
 
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -943,7 +1029,7 @@ function renderCreditReport(data) {
 }
 
 // ==================== Tab switching ====================
-document.querySelectorAll('.tab-btn').forEach(btn => {
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));

@@ -59,6 +59,14 @@ def init_db():
             login_time TIMESTAMPTZ
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token_hash TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ
+        )
+    """)
     conn.commit()
     cur.close()
     conn.close()
@@ -90,6 +98,57 @@ def get_user_by_email(email: str):
     if not row:
         return None
     return {"id": row[0], "email": row[1], "password_hash": row[2]}
+
+
+def create_password_reset_token(email: str, token_hash: str, expires_at: datetime) -> bool:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+    row = cur.fetchone()
+    if row:
+        cur.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = %s AND used_at IS NULL",
+            (row[0],),
+        )
+        cur.execute(
+            "INSERT INTO password_reset_tokens (token_hash, user_id, expires_at) VALUES (%s,%s,%s)",
+            (token_hash, row[0], expires_at),
+        )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return row is not None
+
+
+def consume_password_reset_token(token_hash: str, password_hash: str) -> bool:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """SELECT user_id FROM password_reset_tokens
+           WHERE token_hash = %s AND expires_at > NOW() AND used_at IS NULL
+           FOR UPDATE""",
+        (token_hash,),
+    )
+    row = cur.fetchone()
+    if row:
+        cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (password_hash, row[0]))
+        cur.execute(
+            "UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = %s",
+            (token_hash,),
+        )
+    conn.commit()
+    cur.close()
+    conn.close()
+    return row is not None
+
+
+def delete_password_reset_token(token_hash: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM password_reset_tokens WHERE token_hash = %s", (token_hash,))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def log_login(user_id: int, email: str):

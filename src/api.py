@@ -11,18 +11,25 @@ import shutil
 import tempfile
 import os
 import json
+import hashlib
+import logging
+import secrets
+import smtplib
+from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, EmailStr
 from src.decision_engine import score_applicant, apply_bank_statement_overlay, recommend_loan_amount, build_decision_explanation, apply_credit_report_overlay
 from src.parse_statement import parse_financial_document, merge_reports, decrypt_pdf_if_needed
 from src.credit_report_extractor import extract_credit_report
-from src.db import init_db, save_application, get_all_applications, create_user, get_user_by_email, log_login
+from src.db import init_db, save_application, get_all_applications, create_user, get_user_by_email, log_login, create_password_reset_token, consume_password_reset_token, delete_password_reset_token
 from src.auth import hash_password, verify_password, create_token, decode_token
 from src.bureau_service import verify_identity, get_bureau_scores
 from src.dojah_service import lookup_identity
 
 app = FastAPI(title="Credit Decision")
+logger = logging.getLogger(__name__)
 
 
 @app.on_event("startup")
@@ -86,6 +93,43 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8)
+
+
+def send_password_reset_email(email: str, reset_url: str):
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    if not smtp_user or not smtp_password:
+        raise RuntimeError("SMTP_USER and SMTP_PASSWORD must be configured")
+
+    message = EmailMessage()
+    message["Subject"] = "Reset your Credit Decision Engine password"
+    message["From"] = os.getenv("SMTP_FROM", smtp_user)
+    message["To"] = email
+    message.set_content(
+        "Use the link below to reset your password. It expires in 30 minutes and can only be used once.\n\n"
+        f"{reset_url}\n\nIf you did not request this, you can ignore this email."
+    )
+
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("SMTP_PORT", "587"))
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=10) as server:
+            server.login(smtp_user, smtp_password)
+            server.send_message(message)
+    else:
+        with smtplib.SMTP(host, port, timeout=10) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(message)
+
+
 def get_current_user(authorization: str = Header(None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -112,6 +156,30 @@ def login(req: LoginRequest):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     log_login(user["id"], req.email)
     return {"token": create_token(req.email), "email": req.email}
+
+
+@app.post("/password-reset/request")
+def request_password_reset(req: PasswordResetRequest):
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    if create_password_reset_token(req.email, token_hash, expires_at):
+        app_url = os.getenv("APP_URL", "http://127.0.0.1:8003").rstrip("/")
+        reset_url = f"{app_url}/app?reset_token={token}"
+        try:
+            send_password_reset_email(req.email, reset_url)
+        except Exception:
+            delete_password_reset_token(token_hash)
+            logger.exception("Failed to send password reset email")
+    return {"message": "If an account exists for that email, check your inbox for reset instructions."}
+
+
+@app.post("/password-reset/confirm")
+def confirm_password_reset(req: PasswordResetConfirmRequest):
+    token_hash = hashlib.sha256(req.token.encode()).hexdigest()
+    if not consume_password_reset_token(token_hash, hash_password(req.password)):
+        raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
+    return {"message": "Password reset successfully. You can now log in."}
 
 
 @app.get("/me")
