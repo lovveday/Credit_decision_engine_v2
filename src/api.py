@@ -83,6 +83,11 @@ def serve_frontend():
     return FileResponse("frontend/index.html")
 
 
+@app.get("/favicon.svg")
+def serve_favicon():
+    return FileResponse("frontend/favicon.svg", media_type="image/svg+xml")
+
+
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
